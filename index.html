@@ -300,7 +300,10 @@ function renderVariantUI() {
 function setupDrop(side) {
   const drop = $("drop" + side), file = $("file" + side);
   drop.addEventListener("click", () => file.click());
-  file.addEventListener("change", () => file.files[0] && loadFile(file.files[0], side));
+  file.addEventListener("change", () => {
+    if (file.files[0]) loadFile(file.files[0], side);
+    file.value = ""; // 同じファイルを選び直しても change が発火するように
+  });
   ["dragover", "dragleave", "drop"].forEach(ev => drop.addEventListener(ev, e => {
     e.preventDefault();
     drop.classList.toggle("dragover", ev === "dragover");
