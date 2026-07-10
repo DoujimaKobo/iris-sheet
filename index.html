@@ -190,8 +190,13 @@
     <details class="sec" open>
       <summary>色バリエーション</summary>
       <div class="sec-body">
+        <div class="row"><label>ブロックの方向</label>
+          <select id="blockDir">
+            <option value="row" selected>行（横帯）</option>
+            <option value="col">列（縦帯・ペア単位）</option>
+          </select></div>
         <div class="hint" style="color:var(--sub);font-size:11px;line-height:1.5;margin-top:6px">
-          列ブロックごとに色補正を変えて敷き詰めます。上から順に左の列から割り当てられ、足りない分は繰り返されます。
+          ブロックごとに色補正を変えて敷き詰めます。上（左）から順に割り当てられ、足りない分は繰り返されます。
         </div>
         <div id="variants"></div>
         <button id="btnAddVariant">＋ バリエーションを追加</button>
@@ -262,7 +267,7 @@ function renderVariantUI() {
         <input type="range" data-k="bri" min="30" max="170" value="${v.bri}"><span class="val">${v.bri}</span></div>
       <div class="row"><label>コントラスト (%)</label>
         <input type="range" data-k="con" min="30" max="200" value="${v.con}"><span class="val">${v.con}</span></div>
-      <div class="row"><label>ペア列数</label>
+      <div class="row"><label>行 / 列数</label>
         <input type="number" data-k="cols" min="1" max="20" value="${v.cols}" style="width:64px"></div>
     `;
     const swatch = card.querySelector(".swatch");
@@ -386,8 +391,9 @@ function getLayout() {
   return { paperW, paperH, margin, gap, pairGap, sclera, pairW, pairCols, rows };
 }
 
-/* ペア列 → バリエーション割り当て（各バリエーションの「ペア列数」ぶん連続、以後繰り返し） */
-function variantForPairColumn(p) {
+/* 行またはペア列のインデックス → バリエーション割り当て
+   （各バリエーションの「行/列数」ぶん連続、以後繰り返し） */
+function variantForIndex(p) {
   const vs = state.variants;
   const total = vs.reduce((s, v) => s + Math.max(1, v.cols), 0);
   let r = p % total;
@@ -475,10 +481,11 @@ function render() {
     ctx.drawImage(sprite, cx - sprite.width / 2, cy - sprite.height / 2);
   };
 
+  const byRow = $("blockDir").value === "row";
   for (let p = 0; p < L.pairCols; p++) {
-    const v = variantForPairColumn(p);
     const pairX = p * (L.pairW + L.gap);
     for (let row = 0; row < L.rows; row++) {
+      const v = variantForIndex(byRow ? row : p);
       const cy = oy + (row * (L.sclera + L.gap) + L.sclera / 2) * k;
       drawCell(ox + (pairX + L.sclera / 2) * k, cy, spriteFor("L", v));
       drawCell(ox + (pairX + L.sclera + L.pairGap + L.sclera / 2) * k, cy, spriteFor("R", v));
@@ -632,7 +639,7 @@ $("whiteTransparent").addEventListener("change", () => {
 });
 
 ["scleraD", "irisD", "drawSclera", "drawGuide", "paper", "landscape",
- "marginMm", "gapMm", "pairGapMm", "dpi"].forEach(id => {
+ "marginMm", "gapMm", "pairGapMm", "dpi", "blockDir"].forEach(id => {
   $(id).addEventListener("input", scheduleRender);
   $(id).addEventListener("change", scheduleRender);
 });
