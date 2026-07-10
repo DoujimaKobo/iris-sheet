@@ -127,9 +127,10 @@
         </div>
         <input type="file" id="fileL" accept="image/*" hidden>
         <input type="file" id="fileR" accept="image/*" hidden>
-        <div class="row" style="margin-top:10px">
+        <div class="row" style="margin-top:10px; flex-wrap:wrap">
           <button class="small" id="btnSample">サンプル画像で試す</button>
-          <button class="small" id="btnCopyLR">L→R 複製</button>
+          <button class="small" id="btnCopyLR">L→R 複製（そのまま）</button>
+          <button class="small" id="btnCopyLRFlip">L→R 複製（反転）</button>
         </div>
         <label class="check"><input type="checkbox" id="whiteTransparent" checked>
           白背景を透明化する</label>
@@ -627,6 +628,20 @@ $("btnSample").addEventListener("click", () => {
 $("btnCopyLR").addEventListener("click", () => {
   if (!state.src.L) return;
   setSource(state.src.L, "R"); // 反転せずそのまま複製（ハイライト位置を揃える）
+});
+$("btnCopyLRFlip").addEventListener("click", () => {
+  if (!state.src.L) return;
+  const img = state.src.L;
+  const c = document.createElement("canvas");
+  c.width = img.naturalWidth || img.width;
+  c.height = img.naturalHeight || img.height;
+  const ctx = c.getContext("2d");
+  ctx.translate(c.width, 0);
+  ctx.scale(-1, 1);
+  ctx.drawImage(img, 0, 0);
+  const out = new Image();
+  whenReady(out, () => setSource(out, "R"));
+  out.src = c.toDataURL();
 });
 
 $("whiteThr").addEventListener("input", () => {
