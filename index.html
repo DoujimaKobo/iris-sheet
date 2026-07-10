@@ -129,7 +129,7 @@
         <input type="file" id="fileR" accept="image/*" hidden>
         <div class="row" style="margin-top:10px">
           <button class="small" id="btnSample">サンプル画像で試す</button>
-          <button class="small" id="btnCopyLR">L→R 複製(反転)</button>
+          <button class="small" id="btnCopyLR">L→R 複製</button>
         </div>
         <label class="check"><input type="checkbox" id="whiteTransparent" checked>
           白背景を透明化する</label>
@@ -174,8 +174,10 @@
         <label class="check"><input type="checkbox" id="landscape">横向き</label>
         <div class="row"><label>余白 (mm)</label>
           <input type="number" id="marginMm" value="8" min="0" max="30" step="0.5"></div>
-        <div class="row"><label>間隔 (mm)</label>
-          <input type="number" id="gapMm" value="2" min="0" max="20" step="0.5"></div>
+        <div class="row"><label>ペア内の間隔 (mm)</label>
+          <input type="number" id="pairGapMm" value="2" min="0" max="20" step="0.5"></div>
+        <div class="row"><label>ペア間・行間 (mm)</label>
+          <input type="number" id="gapMm" value="4" min="0" max="20" step="0.5"></div>
         <div class="row"><label>解像度 (dpi)</label>
           <select id="dpi">
             <option value="300" selected>300</option>
@@ -374,14 +376,14 @@ function getLayout() {
   const landscape = $("landscape").checked;
   const paperW = landscape ? ph : pw, paperH = landscape ? pw : ph;
   const margin = Number($("marginMm").value);
-  const gap = Number($("gapMm").value);
+  const gap = Number($("gapMm").value);         // ペア間・行間
+  const pairGap = Number($("pairGapMm").value); // ペア内（L と R の間）
   const sclera = Number($("scleraD").value);
-  const pitch = sclera + gap;
+  const pairW = sclera * 2 + pairGap;
   const usableW = paperW - margin * 2, usableH = paperH - margin * 2;
-  let cols = Math.max(0, Math.floor((usableW + gap) / pitch));
-  const rows = Math.max(0, Math.floor((usableH + gap) / pitch));
-  if (cols % 2 === 1) cols--;   // L/R ペアで使うため偶数列に
-  return { paperW, paperH, margin, gap, sclera, pitch, cols, rows };
+  const pairCols = Math.max(0, Math.floor((usableW + gap) / (pairW + gap)));
+  const rows = Math.max(0, Math.floor((usableH + gap) / (sclera + gap)));
+  return { paperW, paperH, margin, gap, pairGap, sclera, pairW, pairCols, rows };
 }
 
 /* ペア列 → バリエーション割り当て（各バリエーションの「ペア列数」ぶん連続、以後繰り返し） */
@@ -414,7 +416,8 @@ let renderQueued = false;
 function scheduleRender() {
   if (renderQueued) return;
   renderQueued = true;
-  requestAnimationFrame(() => { renderQueued = false; render(); });
+  // rAF はタブ非表示時に発火しないため setTimeout を使う
+  setTimeout(() => { renderQueued = false; render(); }, 0);
 }
 
 function render() {
@@ -450,38 +453,41 @@ function render() {
   const drawGuide = $("drawGuide").checked;
 
   // 配置全体をセンタリング
-  const usedW = L.cols > 0 ? (L.cols * L.pitch - L.gap) : 0;
-  const usedH = L.rows > 0 ? (L.rows * L.pitch - L.gap) : 0;
+  const usedW = L.pairCols > 0 ? (L.pairCols * (L.pairW + L.gap) - L.gap) : 0;
+  const usedH = L.rows > 0 ? (L.rows * (L.sclera + L.gap) - L.gap) : 0;
   const ox = (L.paperW - usedW) / 2 * k;
   const oy = (L.paperH - usedH) / 2 * k;
 
-  for (let col = 0; col < L.cols; col++) {
-    const side = col % 2 === 0 ? "L" : "R";
-    const v = variantForPairColumn(Math.floor(col / 2));
-    const sprite = spriteFor(side, v);
+  const drawCell = (cx, cy, sprite) => {
+    if (drawSclera) {
+      ctx.fillStyle = "#fff";
+      ctx.beginPath();
+      ctx.arc(cx, cy, scleraPx / 2, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    if (drawGuide) {
+      ctx.strokeStyle = "#c8c4bc";
+      ctx.lineWidth = Math.max(1, k * 0.08); // 0.08mm 相当の細線
+      ctx.beginPath();
+      ctx.arc(cx, cy, scleraPx / 2, 0, Math.PI * 2);
+      ctx.stroke();
+    }
+    ctx.drawImage(sprite, cx - sprite.width / 2, cy - sprite.height / 2);
+  };
+
+  for (let p = 0; p < L.pairCols; p++) {
+    const v = variantForPairColumn(p);
+    const pairX = p * (L.pairW + L.gap);
     for (let row = 0; row < L.rows; row++) {
-      const cx = ox + (col * L.pitch + L.sclera / 2) * k;
-      const cy = oy + (row * L.pitch + L.sclera / 2) * k;
-      if (drawSclera) {
-        ctx.fillStyle = "#fff";
-        ctx.beginPath();
-        ctx.arc(cx, cy, scleraPx / 2, 0, Math.PI * 2);
-        ctx.fill();
-      }
-      if (drawGuide) {
-        ctx.strokeStyle = "#c8c4bc";
-        ctx.lineWidth = Math.max(1, k * 0.08); // 0.08mm 相当の細線
-        ctx.beginPath();
-        ctx.arc(cx, cy, scleraPx / 2, 0, Math.PI * 2);
-        ctx.stroke();
-      }
-      ctx.drawImage(sprite, cx - sprite.width / 2, cy - sprite.height / 2);
+      const cy = oy + (row * (L.sclera + L.gap) + L.sclera / 2) * k;
+      drawCell(ox + (pairX + L.sclera / 2) * k, cy, spriteFor("L", v));
+      drawCell(ox + (pairX + L.sclera + L.pairGap + L.sclera / 2) * k, cy, spriteFor("R", v));
     }
   }
 
-  const pairs = Math.floor(L.cols / 2) * L.rows;
+  const pairs = L.pairCols * L.rows;
   $("layoutInfo").textContent =
-    `${L.cols} 列 × ${L.rows} 行 = ${L.cols * L.rows} 個（${pairs} ペア） / ` +
+    `${L.pairCols} ペア列 × ${L.rows} 行 = ${pairs} ペア（${pairs * 2} 個） / ` +
     `${canvas.width}×${canvas.height}px @ ${dpi}dpi`;
 }
 
@@ -593,36 +599,27 @@ function makeSampleIris(seedHue) {
   return img;
 }
 
-function mirrored(img) {
-  const c = document.createElement("canvas");
-  c.width = img.naturalWidth || img.width;
-  c.height = img.naturalHeight || img.height;
-  const ctx = c.getContext("2d");
-  ctx.translate(c.width, 0);
-  ctx.scale(-1, 1);
-  ctx.drawImage(img, 0, 0);
-  const out = new Image();
-  out.src = c.toDataURL();
-  return out;
-}
-
 /* ---------- 初期化 ---------- */
 setupDrop("L");
 setupDrop("R");
 addVariant();
 
+/* data URL 画像は同期的に complete になることがあり、後付け onload では発火しない */
+function whenReady(img, fn) {
+  if (img.complete && (img.naturalWidth || 0) > 0) fn();
+  else img.onload = fn;
+}
+
 $("btnSample").addEventListener("click", () => {
   const l = makeSampleIris(255);
-  l.onload = () => {
+  whenReady(l, () => {
     setSource(l, "L");
-    const r = mirrored(l);
-    r.onload = () => setSource(r, "R");
-  };
+    setSource(l, "R"); // ハイライト位置は左右で同じにする
+  });
 });
 $("btnCopyLR").addEventListener("click", () => {
   if (!state.src.L) return;
-  const r = mirrored(state.src.L);
-  r.onload = () => setSource(r, "R");
+  setSource(state.src.L, "R"); // 反転せずそのまま複製（ハイライト位置を揃える）
 });
 
 $("whiteThr").addEventListener("input", () => {
@@ -635,7 +632,7 @@ $("whiteTransparent").addEventListener("change", () => {
 });
 
 ["scleraD", "irisD", "drawSclera", "drawGuide", "paper", "landscape",
- "marginMm", "gapMm", "dpi"].forEach(id => {
+ "marginMm", "gapMm", "pairGapMm", "dpi"].forEach(id => {
   $(id).addEventListener("input", scheduleRender);
   $(id).addEventListener("change", scheduleRender);
 });
