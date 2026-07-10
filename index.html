@@ -691,6 +691,13 @@ $("btnAddVariant").addEventListener("click", () => {
 $("btnExport").addEventListener("click", exportPNG);
 $("btnPrint").addEventListener("click", printSheet);
 
+/* ?sample=1 でサンプル画像＋色バリエーションを自動表示（デモ用） */
+if (new URLSearchParams(location.search).has("sample")) {
+  $("btnSample").click();
+  $("btnAddVariant").click();
+  $("btnAddVariant").click();
+}
+
 /* プレビューのフィットモード切り替え */
 $("fitSeg").addEventListener("click", e => {
   const btn = e.target.closest("button[data-fit]");
