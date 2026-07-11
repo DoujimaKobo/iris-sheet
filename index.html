@@ -174,6 +174,39 @@
       </div>
     </details>
 
+    <details class="sec">
+      <summary>カボション補正（拡大の目安）</summary>
+      <div class="sec-body">
+        <div class="hint" style="color:var(--sub);font-size:11px;line-height:1.5;margin-top:6px">
+          印刷面にドーム型カボションを乗せるとレンズ効果で虹彩が拡大して見えます。
+          形状から拡大率の目安を計算し、印刷サイズを逆算できます。
+        </div>
+        <div class="row"><label>カボション直径 (mm)</label>
+          <input type="number" id="cabD" value="15" min="2" max="60" step="0.5"></div>
+        <div class="row"><label>ドームの高さ (mm)</label>
+          <input type="number" id="cabH" value="5" min="0.5" max="30" step="0.1"></div>
+        <div class="row"><label>素材</label>
+          <select id="cabN">
+            <option value="1.50" selected>UVレジン・エポキシ (n≈1.50)</option>
+            <option value="1.52">ガラス (n≈1.52)</option>
+            <option value="1.49">アクリル (n≈1.49)</option>
+          </select></div>
+        <div class="row" style="background:var(--accent-soft);border-radius:6px;padding:6px 8px">
+          <label>拡大率の目安</label>
+          <strong id="cabMag" style="font-variant-numeric:tabular-nums">×1.00</strong></div>
+        <div class="row"><label>仕上がりで見せたい虹彩径 (mm)</label>
+          <input type="number" id="cabTarget" value="7" min="1" max="60" step="0.5"></div>
+        <div class="row">
+          <button class="small" id="btnCabApply">→ 印刷時の虹彩径に反映</button>
+          <span class="val" id="cabResult" style="width:auto"></span>
+        </div>
+        <div class="hint" style="color:var(--sub);font-size:11px;line-height:1.5">
+          真上から見た場合の近似値です（カボションの平面側が印刷面に密着している前提。
+          接着剤の層や斜めから見る角度で多少変わります）。
+        </div>
+      </div>
+    </details>
+
     <details class="sec" open>
       <summary>用紙・配置</summary>
       <div class="sec-body">
@@ -690,6 +723,45 @@ $("btnAddVariant").addEventListener("click", () => {
 });
 $("btnExport").addEventListener("click", exportPNG);
 $("btnPrint").addEventListener("click", printSheet);
+
+/* ---------- カボション補正 ----------
+ * 平凸レンズ（平面側を印刷面に密着）を真上から見たときの近軸近似。
+ * 球冠の球面半径 R = (h² + (D/2)²) / 2h、横倍率 M = nR / (nR − (n−1)h)。
+ * 半球 (h = R) なら M = n になる。 */
+function cabochonMagnification() {
+  const D = Number($("cabD").value);
+  const h = Number($("cabH").value);
+  const n = Number($("cabN").value);
+  if (!(D > 0) || !(h > 0)) return NaN;
+  const R = (h * h + (D / 2) * (D / 2)) / (2 * h);
+  const denom = n * R - (n - 1) * h;
+  if (denom <= 0) return Infinity;
+  return (n * R) / denom;
+}
+
+function updateCabochon() {
+  const M = cabochonMagnification();
+  $("cabMag").textContent = isFinite(M) ? "×" + M.toFixed(2) : "—";
+  const target = Number($("cabTarget").value);
+  if (isFinite(M) && target > 0) {
+    $("cabResult").textContent = `→ 印刷 ${(target / M).toFixed(2)} mm`;
+  } else {
+    $("cabResult").textContent = "";
+  }
+}
+
+["cabD", "cabH", "cabN", "cabTarget"].forEach(id => {
+  $(id).addEventListener("input", updateCabochon);
+  $(id).addEventListener("change", updateCabochon);
+});
+$("btnCabApply").addEventListener("click", () => {
+  const M = cabochonMagnification();
+  const target = Number($("cabTarget").value);
+  if (!isFinite(M) || !(target > 0)) return;
+  $("irisD").value = (Math.round(target / M * 100) / 100);
+  scheduleRender();
+});
+updateCabochon();
 
 /* ?sample=1 でサンプル画像＋色バリエーションを自動表示（デモ用） */
 if (new URLSearchParams(location.search).has("sample")) {
